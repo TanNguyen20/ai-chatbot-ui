@@ -88,7 +88,7 @@ const AttachmentChip: React.FC<{
 // ===== Component =====
 const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
   apiKey,
-  endpoint = "https://ai-chat-service-dqme.onrender.com/api/v1/chatbot/info",
+  endpoint = "http://localhost:8080/api/v1/chatbot/info",
   uploadEndpoint, // e.g. "http://localhost:8080/api/v1/uploads"
   maxFiles = 5,
   maxFileSizeMB = 10,
@@ -103,7 +103,8 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null); // fatal errors
+  const [uiError, setUiError] = useState<string | null>(null); // inline, non-fatal
   const [unreadCount, setUnreadCount] = useState(0);
 
   // pending files prior to send
@@ -179,23 +180,34 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
   const addFiles = (files: FileList | File[]) => {
     const arr = Array.from(files);
     const current = pendingFiles.length;
+    const remaining = Math.max(0, maxFiles - current);
 
-    const trimmed = arr.slice(0, Math.max(0, maxFiles - current));
-
-    const tooMany = arr.length + current > maxFiles;
-    const tooBig = trimmed.find((f) => bytesToMB(f.size) > maxFileSizeMB);
-
-    if (tooMany) {
-      setError(`You can attach up to ${maxFiles} files.`);
-      setTimeout(() => setError(null), 3000);
-    }
-    if (tooBig) {
-      setError(`Each file must be ≤ ${maxFileSizeMB} MB.`);
-      setTimeout(() => setError(null), 3000);
+    // Reject if selected > maxFiles in one go
+    if (arr.length > maxFiles) {
+      setUiError(`You can attach up to ${maxFiles} files per selection.`);
+      setTimeout(() => setUiError(null), 3000);
       return;
     }
 
-    setPendingFiles((prev) => [...prev, ...trimmed]);
+    // Respect overall cap with existing pending files
+    const trimmed = arr.slice(0, remaining);
+
+    const tooManyOverall = arr.length + current > maxFiles;
+    const tooBig = trimmed.find((f) => bytesToMB(f.size) > maxFileSizeMB);
+
+    if (tooManyOverall) {
+      setUiError(`You can attach up to ${maxFiles} files total.`);
+      setTimeout(() => setUiError(null), 3000);
+    }
+    if (tooBig) {
+      setUiError(`Each file must be ≤ ${maxFileSizeMB} MB.`);
+      setTimeout(() => setUiError(null), 3000);
+      return;
+    }
+
+    if (trimmed.length) {
+      setPendingFiles((prev) => [...prev, ...trimmed]);
+    }
   };
 
   const removePendingFile = (idx: number) => {
@@ -209,26 +221,35 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
   const onDrop: React.DragEventHandler<HTMLDivElement> = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    if (e.dataTransfer.files?.length) addFiles(e.dataTransfer.files);
+    const files = e.dataTransfer.files;
+    if (!files?.length) return;
+
+    if (files.length > maxFiles) {
+      setUiError(`You can attach up to ${maxFiles} files per selection.`);
+      setTimeout(() => setUiError(null), 3000);
+      return;
+    }
+
+    addFiles(files);
   };
+
   const onDragOver: React.DragEventHandler<HTMLDivElement> = (e) => e.preventDefault();
 
   // Optional uploader (replace with your real upload API)
   const uploadFiles = async (files: File[]): Promise<Attachment[]> => {
     if (!files.length) return [];
 
-    // If an upload endpoint is provided, POST there; otherwise just return previews (demo)
     if (uploadEndpoint) {
       const form = new FormData();
       files.forEach((f) => form.append("files", f));
       const res = await fetch(uploadEndpoint, { method: "POST", body: form });
       if (!res.ok) throw new Error("Upload failed");
-      // Expecting [{name,url,mime,size}] back from server
+      // Expecting [{name,url,mime,size}] back
       const uploaded: Attachment[] = await res.json();
       return uploaded.map((a) => ({ ...a, isImage: a.mime?.startsWith("image/") }));
     }
 
-    // Demo fallback: just use object URLs
+    // Demo fallback
     return files.map(fileToAttachment);
   };
 
@@ -236,7 +257,6 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
     const clean = input.trim();
     if (!clean && pendingFiles.length === 0) return;
 
-    // optimistic user message
     const tempAttachments = pendingFiles.map(fileToAttachment);
     const userMessage: Message = {
       id: crypto.randomUUID(),
@@ -251,19 +271,15 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
     setInput("");
 
     try {
-      // Upload attachments (if any)
       const uploaded = await uploadFiles(pendingFiles);
 
-      // Here you'd call your chat send API with { text: clean, attachments: uploaded }
-      // Simulated bot reply:
+      // Simulated bot reply
       setIsTyping(true);
       setPendingFiles([]);
       setTimeout(() => {
         const botLines = [
           `I received your message: "${clean || "(no text)"}".`,
-          uploaded.length
-            ? `Attachments (${uploaded.length}): ${uploaded.map((f) => f.name).join(", ")}`
-            : "",
+          uploaded.length ? `Attachments (${uploaded.length}): ${uploaded.map((f) => f.name).join(", ")}` : "",
           "This is a demo response.",
         ]
           .filter(Boolean)
@@ -278,7 +294,6 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
           attachments: uploaded,
         };
         setMessages((prev) => {
-          // also update the last user message from "sending" -> "sent"
           const next = [...prev];
           const idx = next.findIndex((m) => m.id === userMessage.id);
           if (idx > -1) next[idx] = { ...next[idx], status: "sent" };
@@ -291,8 +306,8 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
       setMessages((prev) =>
         prev.map((m) => (m.id === userMessage.id ? { ...m, status: "error" } : m))
       );
-      setError(e?.message || "Failed to send message");
-      setTimeout(() => setError(null), 3000);
+      setUiError(e?.message || "Failed to send message");
+      setTimeout(() => setUiError(null), 3000);
     }
   };
 
@@ -466,12 +481,13 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
                     <div
                       className={cx(
                         "px-4 py-3 rounded-2xl shadow-sm text-sm leading-relaxed space-y-2",
+                        "break-words whitespace-pre-wrap", // <-- prevents overflow (user & bot)
                         msg.sender === "user"
                           ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-br-md"
                           : "bg-white dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 text-gray-800 dark:text-neutral-100 rounded-bl-md"
                       )}
                     >
-                      {msg.text && <p className="whitespace-pre-wrap">{msg.text}</p>}
+                      {msg.text && <p className="break-words whitespace-pre-wrap">{msg.text}</p>}
 
                       {/* Render attachments */}
                       {msg.attachments?.length ? (
@@ -538,6 +554,13 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
 
           {/* Input Area with attachments */}
           <div className="p-3 bg-white/85 dark:bg-neutral-900/85 backdrop-blur-sm border-t border-gray-200/60 dark:border-neutral-800">
+            {/* Inline UI error (non-fatal) */}
+            {uiError && (
+              <div className="mb-2 text-[12px] text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">
+                {uiError}
+              </div>
+            )}
+
             {/* Pending attachments preview */}
             {pendingFiles.length > 0 && (
               <div className="mb-2 flex flex-wrap gap-2">
@@ -582,9 +605,18 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
                 multiple
                 accept={accept}
                 onChange={(e) => {
-                  if (e.target.files) addFiles(e.target.files);
-                  // reset to allow selecting the same file again
-                  if (fileInputRef.current) fileInputRef.current.value = "";
+                  const selected = e.target.files;
+                  if (!selected) return;
+
+                  if (selected.length > maxFiles) {
+                    setUiError(`You can attach up to ${maxFiles} files per selection.`);
+                    setTimeout(() => setUiError(null), 3000);
+                    e.currentTarget.value = ""; // reset file input
+                    return;
+                  }
+
+                  addFiles(selected);
+                  e.currentTarget.value = ""; // allow re-selecting same files
                 }}
               />
 
