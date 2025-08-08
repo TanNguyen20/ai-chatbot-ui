@@ -15,6 +15,7 @@ import {
   DocumentTextIcon,
   XMarkIcon as XIcon,
 } from "@heroicons/react/24/outline";
+import type { APIResponse } from "./types/chatbot";
 
 // ===== Types =====
 interface ChatbotConfig {
@@ -54,6 +55,18 @@ function cx(...classes: Array<string | false | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
 
+// Centralized, reusable color tokens for light/dark
+const cls = {
+  textBase: "text-gray-800 dark:text-neutral-100",
+  textMuted: "text-gray-600 dark:text-neutral-300",
+  textSubtle: "text-gray-500 dark:text-neutral-400",
+  icon: "text-gray-700 dark:text-neutral-200",
+  iconSubtle: "text-gray-500 dark:text-neutral-400",
+  border: "border-gray-200 dark:border-neutral-700",
+  panel: "bg-white dark:bg-neutral-800",
+  chipBg: "bg-gray-50 dark:bg-neutral-900",
+};
+
 // KB/MB size formatter
 const formatFileSize = (bytes: number) => {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
@@ -74,14 +87,14 @@ const AttachmentChip: React.FC<{
       "group flex items-center gap-2 px-3 py-2 rounded-lg border text-xs min-w-0 overflow-hidden",
       sender === "user"
         ? "border-white/20 bg-white/10"
-        : "border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-900"
+        : cx(cls.border, cls.chipBg)
     )}
   >
-    <DocumentTextIcon className="w-4 h-4 flex-shrink-0" />
-    <span className={cx("truncate", nameWidthClass)} title={att.name}>
+    <DocumentTextIcon className={cx("w-4 h-4 flex-shrink-0", cls.icon)} />
+    <span className={cx("truncate", cls.textBase, nameWidthClass)} title={att.name}>
       {att.name}
     </span>
-    <span className="flex-shrink-0 opacity-60">({formatFileSize(att.size)})</span>
+    <span className={cx("flex-shrink-0", cls.textSubtle)}>({formatFileSize(att.size)})</span>
   </a>
 );
 
@@ -116,8 +129,8 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
   const fabRef = useRef<HTMLButtonElement>(null);
 
   // Single source of truth for theme color
-  const themeStyles = useMemo(
-    () => ({ ["--theme" as any]: config?.themeColor || "#4f46e5" }),
+  const themeStyles: Record<string, string> = useMemo(
+    () => ({ ["--theme"]: config?.themeColor || "#4f46e5" }),
     [config?.themeColor]
   );
 
@@ -141,9 +154,9 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
         const data = await res.json();
         setConfig(data.result);
         setError(null);
-      } catch (err: any) {
+      } catch (err) {
         console.error("Error fetching chatbot config:", err);
-        setError(err?.message || "Failed to connect to chatbot service");
+        setError((err as unknown as APIResponse<null>)?.message || "Failed to connect to chatbot service");
       } finally {
         setIsLoading(false);
       }
@@ -302,11 +315,11 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
         setIsTyping(false);
         if (!isVisible) setUnreadCount((u) => u + 1);
       }, 700 + Math.random() * 700);
-    } catch (e: any) {
+    } catch (e) {
       setMessages((prev) =>
         prev.map((m) => (m.id === userMessage.id ? { ...m, status: "error" } : m))
       );
-      setUiError(e?.message || "Failed to send message");
+      setUiError((e as unknown as APIResponse<null>)?.message || "Failed to send message");
       setTimeout(() => setUiError(null), 3000);
     }
   };
@@ -329,8 +342,8 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
   if (isLoading) {
     return (
       <div className="fixed bottom-5 right-5 z-[9999]">
-        <div className="w-14 h-14 flex items-center justify-center rounded-full bg-gray-200 shadow-lg animate-pulse">
-          <div className="w-6 h-6 bg-gray-300 rounded animate-pulse" />
+        <div className="w-14 h-14 flex items-center justify-center rounded-full bg-gray-200 dark:bg-neutral-800 shadow-lg animate-pulse">
+          <div className="w-6 h-6 bg-gray-300 dark:bg-neutral-700 rounded animate-pulse" />
         </div>
       </div>
     );
@@ -339,7 +352,7 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
   if (error || !config || turnedOff) {
     if (error) {
       return (
-        <div className="fixed bottom-5 right-5 z-[9999]">
+        <div className="fixed bottom-5 right-5 z=[9999]">
           <div
             className="w-14 h-14 flex items-center justify-center rounded-full bg-red-500 shadow-lg"
             aria-live="polite"
@@ -352,8 +365,10 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
     return null;
   }
 
+  const sendEnabled = (input.trim() || pendingFiles.length > 0) && !isTyping;
+
   return (
-    <div className="fixed bottom-5 right-5 z-[9999] font-sans" style={themeStyles}>
+    <div className={cx("fixed bottom-5 right-5 z-[9999] font-sans", cls.textBase)} style={themeStyles}>
       {/* Floating Action Button */}
       {!isVisible && (
         <button
@@ -455,15 +470,13 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
           >
             {messages.length === 0 ? (
               <div className="text-center py-10">
-                <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-blue-100 to-purple-100 rounded-full flex items-center justify-center">
-                  <ChatBubbleBottomCenterTextIcon className="w-8 h-8 text-blue-500" />
+                <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-blue-100 to-purple-100 rounded-full flex items-center justify-center dark:from-blue-900/20 dark:to-purple-900/20">
+                  <ChatBubbleBottomCenterTextIcon className="w-8 h-8 text-blue-500 dark:text-blue-400" />
                 </div>
-                <h4 className="text-gray-800 dark:text-neutral-100 font-medium mb-1">
+                <h4 className={cx("font-medium mb-1", cls.textBase)}>
                   Welcome to {config.name}!
                 </h4>
-                <p className="text-gray-600 dark:text-neutral-300 text-sm">
-                  How can I help you today?
-                </p>
+                <p className={cx("text-sm", cls.textMuted)}>How can I help you today?</p>
               </div>
             ) : (
               messages.map((msg) => (
@@ -477,14 +490,14 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
                     </div>
                   )}
 
-                  <div className={cx("max-w-[75%]", msg.sender === "user" && "order-1")}>
+                  <div className={cx("max-w-[75%]", msg.sender === "user" && "order-1")}> 
                     <div
                       className={cx(
                         "px-4 py-3 rounded-2xl shadow-sm text-sm leading-relaxed space-y-2",
-                        "break-words", // <-- prevents overflow (user & bot)
+                        "break-words",
                         msg.sender === "user"
                           ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-br-md"
-                          : "bg-white dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 text-gray-800 dark:text-neutral-100 rounded-bl-md"
+                          : cx(cls.panel, cls.border, "text-gray-800 dark:text-neutral-100 rounded-bl-md")
                       )}
                     >
                       {msg.text && <p className="break-words">{msg.text}</p>}
@@ -498,7 +511,7 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
                                 <img
                                   src={att.url}
                                   alt={att.name}
-                                  className="h-24 w-24 object-cover rounded-lg border border-white/10"
+                                  className="h-24 w-24 object-cover rounded-lg border border-black/10 dark:border-white/10"
                                 />
                               </a>
                             ) : (
@@ -515,7 +528,8 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
                     </div>
                     <div
                       className={cx(
-                        "text-[11px] text-gray-500 dark:text-neutral-400 mt-1 flex items-center gap-2",
+                        "text-[11px] mt-1 flex items-center gap-2",
+                        cls.textSubtle,
                         msg.sender === "user" ? "justify-end" : "justify-start"
                       )}
                       aria-label={formatTime(msg.timestamp)}
@@ -541,11 +555,11 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0">
                   <CpuChipIcon className="w-4 h-4 text-white" />
                 </div>
-                <div className="bg-white dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 px-4 py-3 rounded-2xl rounded-bl-md shadow-sm">
+                <div className={cx(cls.panel, cls.border, "px-4 py-3 rounded-2xl rounded-bl-md shadow-sm")}> 
                   <div className="flex gap-1 items-end">
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0.1s" }} />
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0.2s" }} />
+                    <div className="w-2 h-2 bg-gray-400 dark:bg-neutral-500 rounded-full animate-bounce" />
+                    <div className="w-2 h-2 bg-gray-400 dark:bg-neutral-500 rounded-full animate-bounce" style={{ animationDelay: "0.1s" }} />
+                    <div className="w-2 h-2 bg-gray-400 dark:bg-neutral-500 rounded-full animate-bounce" style={{ animationDelay: "0.2s" }} />
                   </div>
                 </div>
               </div>
@@ -556,7 +570,7 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
           <div className="p-3 bg-white/85 dark:bg-neutral-900/85 backdrop-blur-sm border-t border-gray-200/60 dark:border-neutral-800">
             {/* Inline UI error (non-fatal) */}
             {uiError && (
-              <div className="mb-2 text-[12px] text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">
+              <div className="mb-2 text-[12px] text-red-600 bg-red-50 dark:text-red-400 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 rounded-md px-3 py-2">
                 {uiError}
               </div>
             )}
@@ -576,17 +590,17 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
                           className="h-16 w-16 object-cover rounded-lg border border-gray-200 dark:border-neutral-700"
                         />
                       ) : (
-                        <div className="h-8 min-w-40 max-w-52 px-3 py-2 rounded-lg border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-900 text-xs flex items-center gap-2 overflow-hidden">
-                          <DocumentTextIcon className="w-4 h-4 flex-shrink-0" />
-                          <span className="truncate" title={f.name}>
+                        <div className={cx("h-8 min-w-40 max-w-52 px-3 py-2 rounded-lg border text-xs flex items-center gap-2 overflow-hidden", cls.border, cls.chipBg)}>
+                          <DocumentTextIcon className={cx("w-4 h-4 flex-shrink-0", cls.icon)} />
+                          <span className={cx("truncate", cls.textBase)} title={f.name}>
                             {f.name}
                           </span>
-                          <span className="flex-shrink-0 opacity-60">{formatFileSize(f.size)}</span>
+                          <span className={cx("flex-shrink-0", cls.textSubtle)}>{formatFileSize(f.size)}</span>
                         </div>
                       )}
                       <button
                         onClick={() => removePendingFile(idx)}
-                        className="absolute -top-2 -right-2 bg-black/70 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition"
+                        className="absolute -top-2 -right-2 bg-black/70 dark:bg-white/20 text-white dark:text-neutral-900 rounded-full p-1 opacity-0 group-hover:opacity-100 transition"
                         aria-label={`Remove ${f.name}`}
                       >
                         <XIcon className="w-3 h-3" />
@@ -623,11 +637,11 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
               <button
                 type="button"
                 onClick={onPickFiles}
-                className="h-11 w-11 shrink-0 flex items-center justify-center rounded-xl border border-gray-300 dark:border-neutral-700 hover:bg-gray-100 dark:hover:bg-neutral-800 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:color-mix(in_oklab,var(--theme)_40%,white_0%)]"
+                className={cx("h-11 w-11 shrink-0 flex items-center justify-center rounded-xl transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:color-mix(in_oklab,var(--theme)_40%,white_0%)] hover:bg-gray-100 dark:hover:bg-neutral-800 border", cls.border)}
                 title="Attach files"
                 aria-label="Attach files"
               >
-                <PaperClipIcon className="w-5 h-5" />
+                <PaperClipIcon className={cx("w-5 h-5", cls.iconSubtle)} />
               </button>
 
               <div className="flex-1 relative">
@@ -644,43 +658,38 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
                       handleSendMessage();
                     }
                   }}
-                  className="w-full px-4 py-3 pr-12 border border-gray-300 dark:border-neutral-700 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:color-mix(in_oklab,var(--theme)_45%,white_0%)] focus:border-transparent text-sm bg-white/90 dark:bg-neutral-800/90 placeholder:text-gray-400 dark:placeholder:text-neutral-500"
+                  className={cx(
+                    "w-full px-4 py-3 pr-12 rounded-xl shadow-sm focus:outline-none text-sm bg-white/90 dark:bg-neutral-800/90",
+                    "focus:ring-2 focus:ring-[color:color-mix(in_oklab,var(--theme)_45%,white_0%)] focus:border-transparent",
+                    "placeholder:text-gray-400 dark:placeholder:text-neutral-500 border",
+                    cls.border,
+                    cls.textBase
+                  )}
                   aria-label="Message input"
                   disabled={isTyping}
                 />
-                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-gray-400 select-none">
+                <div className={cx("absolute right-3 top-1/2 -translate-y-1/2 text-[11px] select-none", cls.textSubtle)}>
                   {input.length}/500
                 </div>
               </div>
 
               <button
                 onClick={handleSendMessage}
-                disabled={(!!!input.trim() && pendingFiles.length === 0) || isTyping}
+                disabled={!sendEnabled}
                 className={cx(
                   "w-12 h-12 flex items-center justify-center rounded-xl shadow-sm transition-transform duration-200",
                   "focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:color-mix(in_oklab,var(--theme)_40%,white_0%)]",
-                  (!!!input.trim() && pendingFiles.length === 0) || isTyping
-                    ? "opacity-50 cursor-not-allowed"
-                    : "hover:scale-105 active:scale-95"
+                  sendEnabled ? "hover:scale-105 active:scale-95" : "opacity-50 cursor-not-allowed",
+                  !sendEnabled && "bg-gray-200 dark:bg-neutral-700"
                 )}
-                style={{
-                  background:
-                    (input.trim() || pendingFiles.length > 0) && !isTyping
-                      ? `linear-gradient(135deg, var(--theme), color-mix(in oklab, var(--theme) 87%, white))`
-                      : "#e5e7eb",
-                }}
+                style={sendEnabled ? { background: `linear-gradient(135deg, var(--theme), color-mix(in oklab, var(--theme) 87%, white))` } : undefined}
                 aria-label="Send message"
               >
-                <PaperAirplaneIcon
-                  className={cx(
-                    "w-5 h-5",
-                    (input.trim() || pendingFiles.length > 0) && !isTyping ? "text-white" : "text-gray-500"
-                  )}
-                />
+                <PaperAirplaneIcon className={cx("w-5 h-5", sendEnabled ? "text-white" : cls.iconSubtle)} />
               </button>
             </div>
 
-            <p className="mt-2 text-[11px] text-gray-500 dark:text-neutral-400">
+            <p className={cx("mt-2 text-[11px]", cls.textSubtle)}>
               Attach up to {maxFiles} files • Max size {maxFileSizeMB}MB each
             </p>
           </div>
