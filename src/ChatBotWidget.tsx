@@ -8,7 +8,13 @@ import {
   PaperAirplaneIcon,
   ExclamationTriangleIcon,
 } from "@heroicons/react/24/solid";
-import { UserIcon, CpuChipIcon, PaperClipIcon, DocumentTextIcon, XMarkIcon as XIcon } from "@heroicons/react/24/outline";
+import {
+  UserIcon,
+  CpuChipIcon,
+  PaperClipIcon,
+  DocumentTextIcon,
+  XMarkIcon as XIcon,
+} from "@heroicons/react/24/outline";
 
 // ===== Types =====
 interface ChatbotConfig {
@@ -48,6 +54,12 @@ function cx(...classes: Array<string | false | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
 
+// KB/MB size formatter
+const formatFileSize = (bytes: number) => {
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)}MB`;
+};
+
 // Small chip for non-image files with responsive truncation
 const AttachmentChip: React.FC<{
   att: Attachment;
@@ -69,9 +81,7 @@ const AttachmentChip: React.FC<{
     <span className={cx("truncate", nameWidthClass)} title={att.name}>
       {att.name}
     </span>
-    <span className="flex-shrink-0 opacity-60">
-      ({(att.size / 1024 / 1024).toFixed(1)}MB)
-    </span>
+    <span className="flex-shrink-0 opacity-60">({formatFileSize(att.size)})</span>
   </a>
 );
 
@@ -257,7 +267,7 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
           "This is a demo response.",
         ]
           .filter(Boolean)
-          .join(" ");
+          .join(" \n");
 
         const botMessage: Message = {
           id: crypto.randomUUID(),
@@ -315,7 +325,10 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
     if (error) {
       return (
         <div className="fixed bottom-5 right-5 z-[9999]">
-          <div className="w-14 h-14 flex items-center justify-center rounded-full bg-red-500 shadow-lg" aria-live="polite">
+          <div
+            className="w-14 h-14 flex items-center justify-center rounded-full bg-red-500 shadow-lg"
+            aria-live="polite"
+          >
             <ExclamationTriangleIcon className="w-6 h-6 text-white" />
           </div>
         </div>
@@ -351,7 +364,10 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
           )}
 
           {/* Pulse */}
-          <div className="absolute inset-0 rounded-full animate-ping opacity-20" style={{ background: "var(--theme)" }} />
+          <div
+            className="absolute inset-0 rounded-full animate-ping opacity-20"
+            style={{ background: "var(--theme)" }}
+          />
         </button>
       )}
 
@@ -438,10 +454,7 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
               messages.map((msg) => (
                 <div
                   key={msg.id}
-                  className={cx(
-                    "flex gap-3",
-                    msg.sender === "user" ? "justify-end" : "justify-start"
-                  )}
+                  className={cx("flex gap-3", msg.sender === "user" ? "justify-end" : "justify-start")}
                 >
                   {msg.sender === "bot" && (
                     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0">
@@ -465,13 +478,7 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
                         <div className="flex flex-wrap gap-2">
                           {msg.attachments.map((att, i) =>
                             att.isImage ? (
-                              <a
-                                key={i}
-                                href={att.url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="block"
-                              >
+                              <a key={i} href={att.url} target="_blank" rel="noreferrer" className="block">
                                 <img
                                   src={att.url}
                                   alt={att.name}
@@ -498,12 +505,8 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
                       aria-label={formatTime(msg.timestamp)}
                     >
                       {formatTime(msg.timestamp)}
-                      {msg.status === "sending" && (
-                        <span className="italic opacity-70">uploading…</span>
-                      )}
-                      {msg.status === "error" && (
-                        <span className="text-red-500">failed</span>
-                      )}
+                      {msg.status === "sending" && <span className="italic opacity-70">uploading…</span>}
+                      {msg.status === "error" && <span className="text-red-500">failed</span>}
                     </div>
                   </div>
 
@@ -525,14 +528,8 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
                 <div className="bg-white dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 px-4 py-3 rounded-2xl rounded-bl-md shadow-sm">
                   <div className="flex gap-1 items-end">
                     <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
-                    <div
-                      className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
-                      style={{ animationDelay: "0.1s" }}
-                    />
-                    <div
-                      className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
-                      style={{ animationDelay: "0.2s" }}
-                    />
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0.1s" }} />
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0.2s" }} />
                   </div>
                 </div>
               </div>
@@ -561,6 +558,7 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
                           <span className="truncate" title={f.name}>
                             {f.name}
                           </span>
+                          <span className="flex-shrink-0 opacity-60">{formatFileSize(f.size)}</span>
                         </div>
                       )}
                       <button
@@ -644,9 +642,7 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
                 <PaperAirplaneIcon
                   className={cx(
                     "w-5 h-5",
-                    (input.trim() || pendingFiles.length > 0) && !isTyping
-                      ? "text-white"
-                      : "text-gray-500"
+                    (input.trim() || pendingFiles.length > 0) && !isTyping ? "text-white" : "text-gray-500"
                   )}
                 />
               </button>
