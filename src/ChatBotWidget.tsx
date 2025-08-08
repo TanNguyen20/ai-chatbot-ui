@@ -395,7 +395,7 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
           className={cx(
             "flex flex-col bg-white/95 dark:bg-neutral-900/95 backdrop-blur-xl rounded-2xl shadow-2xl overflow-hidden border border-white/20",
             "transition-all duration-300 ease-out",
-            isExpanded ? "w-96 h-[680px]" : "w-80 h-[560px]",
+            isExpanded ? "w-140 h-[700px]" : "w-90 h-[500px]",
             isClosingAnim ? "opacity-0 scale-95 translate-y-3" : "opacity-100 scale-100 translate-y-0"
           )}
           style={{
@@ -576,7 +576,7 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
                           className="h-16 w-16 object-cover rounded-lg border border-gray-200 dark:border-neutral-700"
                         />
                       ) : (
-                        <div className="h-16 min-w-40 max-w-52 px-3 py-2 rounded-lg border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-900 text-xs flex items-center gap-2 overflow-hidden">
+                        <div className="h-8 min-w-40 max-w-52 px-3 py-2 rounded-lg border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-900 text-xs flex items-center gap-2 overflow-hidden">
                           <DocumentTextIcon className="w-4 h-4 flex-shrink-0" />
                           <span className="truncate" title={f.name}>
                             {f.name}
