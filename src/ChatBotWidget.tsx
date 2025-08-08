@@ -8,12 +8,21 @@ import {
   PaperAirplaneIcon,
   ExclamationTriangleIcon,
 } from "@heroicons/react/24/solid";
-import { UserIcon, CpuChipIcon } from "@heroicons/react/24/outline";
+import { UserIcon, CpuChipIcon, PaperClipIcon, DocumentTextIcon, XMarkIcon as XIcon } from "@heroicons/react/24/outline";
 
+// ===== Types =====
 interface ChatbotConfig {
   uuid: string;
   name: string;
   themeColor: string; // any valid CSS color
+}
+
+interface Attachment {
+  name: string;
+  url: string; // uploaded/download URL (or object URL before upload)
+  mime: string;
+  size: number; // bytes
+  isImage?: boolean;
 }
 
 interface Message {
@@ -22,19 +31,59 @@ interface Message {
   text: string;
   timestamp: Date;
   status?: "sending" | "sent" | "error";
+  attachments?: Attachment[];
 }
 
 interface ChatbotWidgetProps {
   apiKey: string;
-  endpoint?: string; // allow override for prod
+  endpoint?: string; // GET chatbot config
+  uploadEndpoint?: string; // optional: POST file uploads
+  maxFiles?: number;
+  maxFileSizeMB?: number;
+  accept?: string; // input accept string
 }
 
-// Small util to join class strings safely
+// ===== Utils =====
 function cx(...classes: Array<string | false | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
 
-const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ apiKey, endpoint = "https://ai-chat-service-dqme.onrender.com/api/v1/chatbot/info" }) => {
+// Small chip for non-image files with responsive truncation
+const AttachmentChip: React.FC<{
+  att: Attachment;
+  sender: "user" | "bot";
+  nameWidthClass: string;
+}> = ({ att, sender, nameWidthClass }) => (
+  <a
+    href={att.url}
+    target="_blank"
+    rel="noreferrer"
+    className={cx(
+      "group flex items-center gap-2 px-3 py-2 rounded-lg border text-xs min-w-0 overflow-hidden",
+      sender === "user"
+        ? "border-white/20 bg-white/10"
+        : "border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-900"
+    )}
+  >
+    <DocumentTextIcon className="w-4 h-4 flex-shrink-0" />
+    <span className={cx("truncate", nameWidthClass)} title={att.name}>
+      {att.name}
+    </span>
+    <span className="flex-shrink-0 opacity-60">
+      ({(att.size / 1024 / 1024).toFixed(1)}MB)
+    </span>
+  </a>
+);
+
+// ===== Component =====
+const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
+  apiKey,
+  endpoint = "https://ai-chat-service-dqme.onrender.com/api/v1/chatbot/info",
+  uploadEndpoint, // e.g. "http://localhost:8080/api/v1/uploads"
+  maxFiles = 5,
+  maxFileSizeMB = 10,
+  accept = "image/*,.pdf,.doc,.docx,.txt,.md,.csv,.xls,.xlsx,.ppt,.pptx,.json",
+}) => {
   const [isVisible, setIsVisible] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [turnedOff, setTurnedOff] = useState(false);
@@ -46,23 +95,38 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ apiKey, endpoint = "https
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
+
+  // pending files prior to send
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+
   const chatRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const fabRef = useRef<HTMLButtonElement>(null);
 
-  // Make it easy to style everything off a CSS variable
-  const themeStyles = useMemo(() => ({
-    ["--theme" as any]: config?.themeColor || "#4f46e5",
-  }), [config?.themeColor]);
+  // Single source of truth for theme color
+  const themeStyles = useMemo(
+    () => ({ ["--theme" as any]: config?.themeColor || "#4f46e5" }),
+    [config?.themeColor]
+  );
+
+  // Responsive filename width for attachment chips
+  const nameWidthClass = useMemo(
+    () => (isExpanded ? "max-w-[200px]" : "max-w-[110px]"),
+    [isExpanded]
+  );
 
   useEffect(() => {
     const fetchConfig = async () => {
       try {
         setIsLoading(true);
-        const res = await fetch(endpoint, {
-          headers: { "X-Api-Key": apiKey },
-        });
-        if (!res.ok) throw new Error(res.status === 401 ? "Unauthorized or invalid API key" : "Failed to load chatbot config");
+        const res = await fetch(endpoint, { headers: { "X-Api-Key": apiKey } });
+        if (!res.ok)
+          throw new Error(
+            res.status === 401
+              ? "Unauthorized or invalid API key"
+              : "Failed to load chatbot config"
+          );
         const data = await res.json();
         setConfig(data.result);
         setError(null);
@@ -83,46 +147,149 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ apiKey, endpoint = "https
     el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   };
 
-  useEffect(() => { scrollToBottom(); }, [messages, isTyping]);
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, isTyping]);
 
-  const formatTime = (date: Date) => date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const formatTime = (date: Date) =>
+    date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+  // ---- File helpers ----
+  const bytesToMB = (b: number) => b / (1024 * 1024);
+  const fileToAttachment = (file: File): Attachment => ({
+    name: file.name,
+    url: URL.createObjectURL(file), // object URL for preview
+    mime: file.type || "application/octet-stream",
+    size: file.size,
+    isImage: (file.type || "").startsWith("image/"),
+  });
+
+  const onPickFiles = () => fileInputRef.current?.click();
+
+  const addFiles = (files: FileList | File[]) => {
+    const arr = Array.from(files);
+    const current = pendingFiles.length;
+
+    const trimmed = arr.slice(0, Math.max(0, maxFiles - current));
+
+    const tooMany = arr.length + current > maxFiles;
+    const tooBig = trimmed.find((f) => bytesToMB(f.size) > maxFileSizeMB);
+
+    if (tooMany) {
+      setError(`You can attach up to ${maxFiles} files.`);
+      setTimeout(() => setError(null), 3000);
+    }
+    if (tooBig) {
+      setError(`Each file must be ≤ ${maxFileSizeMB} MB.`);
+      setTimeout(() => setError(null), 3000);
+      return;
+    }
+
+    setPendingFiles((prev) => [...prev, ...trimmed]);
+  };
+
+  const removePendingFile = (idx: number) => {
+    setPendingFiles((prev) => {
+      const next = [...prev];
+      next.splice(idx, 1);
+      return next;
+    });
+  };
+
+  const onDrop: React.DragEventHandler<HTMLDivElement> = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer.files?.length) addFiles(e.dataTransfer.files);
+  };
+  const onDragOver: React.DragEventHandler<HTMLDivElement> = (e) => e.preventDefault();
+
+  // Optional uploader (replace with your real upload API)
+  const uploadFiles = async (files: File[]): Promise<Attachment[]> => {
+    if (!files.length) return [];
+
+    // If an upload endpoint is provided, POST there; otherwise just return previews (demo)
+    if (uploadEndpoint) {
+      const form = new FormData();
+      files.forEach((f) => form.append("files", f));
+      const res = await fetch(uploadEndpoint, { method: "POST", body: form });
+      if (!res.ok) throw new Error("Upload failed");
+      // Expecting [{name,url,mime,size}] back from server
+      const uploaded: Attachment[] = await res.json();
+      return uploaded.map((a) => ({ ...a, isImage: a.mime?.startsWith("image/") }));
+    }
+
+    // Demo fallback: just use object URLs
+    return files.map(fileToAttachment);
+  };
 
   const handleSendMessage = async () => {
     const clean = input.trim();
-    if (!clean) return;
+    if (!clean && pendingFiles.length === 0) return;
 
+    // optimistic user message
+    const tempAttachments = pendingFiles.map(fileToAttachment);
     const userMessage: Message = {
       id: crypto.randomUUID(),
       sender: "user",
       text: clean,
       timestamp: new Date(),
-      status: "sent",
+      status: pendingFiles.length ? "sending" : "sent",
+      attachments: tempAttachments,
     };
 
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
-    setIsTyping(true);
 
-    // Demo bot response (replace with your API call)
-    setTimeout(() => {
-      const botMessage: Message = {
-        id: crypto.randomUUID(),
-        sender: "bot",
-        text: `I received your message: "${userMessage.text}". This is a demo response.`,
-        timestamp: new Date(),
-        status: "sent",
-      };
-      setMessages((prev) => [...prev, botMessage]);
-      setIsTyping(false);
-      if (!isVisible) setUnreadCount((u) => u + 1);
-    }, 700 + Math.random() * 700);
+    try {
+      // Upload attachments (if any)
+      const uploaded = await uploadFiles(pendingFiles);
+
+      // Here you'd call your chat send API with { text: clean, attachments: uploaded }
+      // Simulated bot reply:
+      setIsTyping(true);
+      setPendingFiles([]);
+      setTimeout(() => {
+        const botLines = [
+          `I received your message: "${clean || "(no text)"}".`,
+          uploaded.length
+            ? `Attachments (${uploaded.length}): ${uploaded.map((f) => f.name).join(", ")}`
+            : "",
+          "This is a demo response.",
+        ]
+          .filter(Boolean)
+          .join(" ");
+
+        const botMessage: Message = {
+          id: crypto.randomUUID(),
+          sender: "bot",
+          text: botLines,
+          timestamp: new Date(),
+          status: "sent",
+          attachments: uploaded,
+        };
+        setMessages((prev) => {
+          // also update the last user message from "sending" -> "sent"
+          const next = [...prev];
+          const idx = next.findIndex((m) => m.id === userMessage.id);
+          if (idx > -1) next[idx] = { ...next[idx], status: "sent" };
+          return [...next, botMessage];
+        });
+        setIsTyping(false);
+        if (!isVisible) setUnreadCount((u) => u + 1);
+      }, 700 + Math.random() * 700);
+    } catch (e: any) {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === userMessage.id ? { ...m, status: "error" } : m))
+      );
+      setError(e?.message || "Failed to send message");
+      setTimeout(() => setError(null), 3000);
+    }
   };
 
   const handleToggleVisibility = () => {
     if (!isVisible) {
       setIsVisible(true);
       setUnreadCount(0);
-      // Focus input when opening
       setTimeout(() => inputRef.current?.focus(), 250);
     } else {
       setIsClosingAnim(true);
@@ -197,17 +364,19 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ apiKey, endpoint = "https
           className={cx(
             "flex flex-col bg-white/95 dark:bg-neutral-900/95 backdrop-blur-xl rounded-2xl shadow-2xl overflow-hidden border border-white/20",
             "transition-all duration-300 ease-out",
-            isExpanded ? "w-96 h-[620px]" : "w-80 h-[520px]",
+            isExpanded ? "w-96 h-[680px]" : "w-80 h-[560px]",
             isClosingAnim ? "opacity-0 scale-95 translate-y-3" : "opacity-100 scale-100 translate-y-0"
           )}
           style={{
-            boxShadow: `0 25px 50px -12px color-mix(in oklab, var(--theme) 20%, transparent), 0 0 0 1px color-mix(in oklab, var(--theme) 6%, transparent)`
+            boxShadow: `0 25px 50px -12px color-mix(in oklab, var(--theme) 20%, transparent), 0 0 0 1px color-mix(in oklab, var(--theme) 6%, transparent)`,
           }}
         >
           {/* Header */}
           <div
             className="flex justify-between items-center p-4 backdrop-blur-sm relative"
-            style={{ background: `linear-gradient(135deg, var(--theme), color-mix(in oklab, var(--theme) 90%, black))` }}
+            style={{
+              background: `linear-gradient(135deg, var(--theme), color-mix(in oklab, var(--theme) 90%, black))`,
+            }}
           >
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
@@ -258,12 +427,22 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ apiKey, endpoint = "https
                 <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-blue-100 to-purple-100 rounded-full flex items-center justify-center">
                   <ChatBubbleBottomCenterTextIcon className="w-8 h-8 text-blue-500" />
                 </div>
-                <h4 className="text-gray-800 dark:text-neutral-100 font-medium mb-1">Welcome to {config.name}!</h4>
-                <p className="text-gray-600 dark:text-neutral-300 text-sm">How can I help you today?</p>
+                <h4 className="text-gray-800 dark:text-neutral-100 font-medium mb-1">
+                  Welcome to {config.name}!
+                </h4>
+                <p className="text-gray-600 dark:text-neutral-300 text-sm">
+                  How can I help you today?
+                </p>
               </div>
             ) : (
               messages.map((msg) => (
-                <div key={msg.id} className={cx("flex gap-3", msg.sender === "user" ? "justify-end" : "justify-start")}>                  
+                <div
+                  key={msg.id}
+                  className={cx(
+                    "flex gap-3",
+                    msg.sender === "user" ? "justify-end" : "justify-start"
+                  )}
+                >
                   {msg.sender === "bot" && (
                     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0">
                       <CpuChipIcon className="w-4 h-4 text-white" />
@@ -273,17 +452,58 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ apiKey, endpoint = "https
                   <div className={cx("max-w-[75%]", msg.sender === "user" && "order-1")}>
                     <div
                       className={cx(
-                        "px-4 py-3 rounded-2xl shadow-sm text-sm leading-relaxed",
+                        "px-4 py-3 rounded-2xl shadow-sm text-sm leading-relaxed space-y-2",
                         msg.sender === "user"
                           ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-br-md"
                           : "bg-white dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 text-gray-800 dark:text-neutral-100 rounded-bl-md"
                       )}
                     >
-                      {msg.text}
+                      {msg.text && <p className="whitespace-pre-wrap">{msg.text}</p>}
+
+                      {/* Render attachments */}
+                      {msg.attachments?.length ? (
+                        <div className="flex flex-wrap gap-2">
+                          {msg.attachments.map((att, i) =>
+                            att.isImage ? (
+                              <a
+                                key={i}
+                                href={att.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="block"
+                              >
+                                <img
+                                  src={att.url}
+                                  alt={att.name}
+                                  className="h-24 w-24 object-cover rounded-lg border border-white/10"
+                                />
+                              </a>
+                            ) : (
+                              <AttachmentChip
+                                key={i}
+                                att={att}
+                                sender={msg.sender}
+                                nameWidthClass={nameWidthClass}
+                              />
+                            )
+                          )}
+                        </div>
+                      ) : null}
                     </div>
-                    <div className={cx("text-[11px] text-gray-500 dark:text-neutral-400 mt-1", msg.sender === "user" ? "text-right" : "text-left")}
-                         aria-label={formatTime(msg.timestamp)}>
+                    <div
+                      className={cx(
+                        "text-[11px] text-gray-500 dark:text-neutral-400 mt-1 flex items-center gap-2",
+                        msg.sender === "user" ? "justify-end" : "justify-start"
+                      )}
+                      aria-label={formatTime(msg.timestamp)}
+                    >
                       {formatTime(msg.timestamp)}
+                      {msg.status === "sending" && (
+                        <span className="italic opacity-70">uploading…</span>
+                      )}
+                      {msg.status === "error" && (
+                        <span className="text-red-500">failed</span>
+                      )}
                     </div>
                   </div>
 
@@ -305,22 +525,86 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ apiKey, endpoint = "https
                 <div className="bg-white dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 px-4 py-3 rounded-2xl rounded-bl-md shadow-sm">
                   <div className="flex gap-1 items-end">
                     <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0.1s" }} />
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0.2s" }} />
+                    <div
+                      className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                      style={{ animationDelay: "0.1s" }}
+                    />
+                    <div
+                      className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                      style={{ animationDelay: "0.2s" }}
+                    />
                   </div>
                 </div>
               </div>
             )}
           </div>
 
-          {/* Input Area */}
+          {/* Input Area with attachments */}
           <div className="p-3 bg-white/85 dark:bg-neutral-900/85 backdrop-blur-sm border-t border-gray-200/60 dark:border-neutral-800">
-            <div className="flex gap-2 items-end">
+            {/* Pending attachments preview */}
+            {pendingFiles.length > 0 && (
+              <div className="mb-2 flex flex-wrap gap-2">
+                {pendingFiles.map((f, idx) => {
+                  const isImage = (f.type || "").startsWith("image/");
+                  const url = URL.createObjectURL(f);
+                  return (
+                    <div key={idx} className="relative group">
+                      {isImage ? (
+                        <img
+                          src={url}
+                          alt={f.name}
+                          className="h-16 w-16 object-cover rounded-lg border border-gray-200 dark:border-neutral-700"
+                        />
+                      ) : (
+                        <div className="h-16 min-w-40 max-w-52 px-3 py-2 rounded-lg border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-900 text-xs flex items-center gap-2 overflow-hidden">
+                          <DocumentTextIcon className="w-4 h-4 flex-shrink-0" />
+                          <span className="truncate" title={f.name}>
+                            {f.name}
+                          </span>
+                        </div>
+                      )}
+                      <button
+                        onClick={() => removePendingFile(idx)}
+                        className="absolute -top-2 -right-2 bg-black/70 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition"
+                        aria-label={`Remove ${f.name}`}
+                      >
+                        <XIcon className="w-3 h-3" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="flex gap-2 items-end" onDrop={onDrop} onDragOver={onDragOver}>
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                multiple
+                accept={accept}
+                onChange={(e) => {
+                  if (e.target.files) addFiles(e.target.files);
+                  // reset to allow selecting the same file again
+                  if (fileInputRef.current) fileInputRef.current.value = "";
+                }}
+              />
+
+              <button
+                type="button"
+                onClick={onPickFiles}
+                className="h-11 w-11 shrink-0 flex items-center justify-center rounded-xl border border-gray-300 dark:border-neutral-700 hover:bg-gray-100 dark:hover:bg-neutral-800 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:color-mix(in_oklab,var(--theme)_40%,white_0%)]"
+                title="Attach files"
+                aria-label="Attach files"
+              >
+                <PaperClipIcon className="w-5 h-5" />
+              </button>
+
               <div className="flex-1 relative">
                 <input
                   ref={inputRef}
                   type="text"
-                  placeholder="Type your message…"
+                  placeholder="Type your message… (drag & drop files here)"
                   maxLength={500}
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
@@ -338,24 +622,39 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ apiKey, endpoint = "https
                   {input.length}/500
                 </div>
               </div>
+
               <button
                 onClick={handleSendMessage}
-                disabled={!input.trim() || isTyping}
+                disabled={(!!!input.trim() && pendingFiles.length === 0) || isTyping}
                 className={cx(
                   "w-12 h-12 flex items-center justify-center rounded-xl shadow-sm transition-transform duration-200",
                   "focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:color-mix(in_oklab,var(--theme)_40%,white_0%)]",
-                  !input.trim() || isTyping ? "opacity-50 cursor-not-allowed" : "hover:scale-105 active:scale-95"
+                  (!!!input.trim() && pendingFiles.length === 0) || isTyping
+                    ? "opacity-50 cursor-not-allowed"
+                    : "hover:scale-105 active:scale-95"
                 )}
                 style={{
-                  background: input.trim() && !isTyping
-                    ? `linear-gradient(135deg, var(--theme), color-mix(in oklab, var(--theme) 87%, white))`
-                    : "#e5e7eb",
+                  background:
+                    (input.trim() || pendingFiles.length > 0) && !isTyping
+                      ? `linear-gradient(135deg, var(--theme), color-mix(in oklab, var(--theme) 87%, white))`
+                      : "#e5e7eb",
                 }}
                 aria-label="Send message"
               >
-                <PaperAirplaneIcon className={cx("w-5 h-5", input.trim() && !isTyping ? "text-white" : "text-gray-500")} />
+                <PaperAirplaneIcon
+                  className={cx(
+                    "w-5 h-5",
+                    (input.trim() || pendingFiles.length > 0) && !isTyping
+                      ? "text-white"
+                      : "text-gray-500"
+                  )}
+                />
               </button>
             </div>
+
+            <p className="mt-2 text-[11px] text-gray-500 dark:text-neutral-400">
+              Attach up to {maxFiles} files • Max size {maxFileSizeMB}MB each
+            </p>
           </div>
         </div>
       )}
