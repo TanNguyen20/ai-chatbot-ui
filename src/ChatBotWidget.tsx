@@ -481,13 +481,13 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
                     <div
                       className={cx(
                         "px-4 py-3 rounded-2xl shadow-sm text-sm leading-relaxed space-y-2",
-                        "break-words whitespace-pre-wrap", // <-- prevents overflow (user & bot)
+                        "break-words", // <-- prevents overflow (user & bot)
                         msg.sender === "user"
                           ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-br-md"
                           : "bg-white dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 text-gray-800 dark:text-neutral-100 rounded-bl-md"
                       )}
                     >
-                      {msg.text && <p className="break-words whitespace-pre-wrap">{msg.text}</p>}
+                      {msg.text && <p className="break-words">{msg.text}</p>}
 
                       {/* Render attachments */}
                       {msg.attachments?.length ? (
