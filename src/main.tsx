@@ -1,6 +1,6 @@
 import ReactDOM from 'react-dom/client';
 import "./index.css"
-import AiChat from './ChatBotWidget';
+import AiChat from './index';
 
 class AiChatElement extends HTMLElement {
   root: ShadowRoot;
