@@ -1,5 +1,7 @@
 @import '../tailwind-property-fallback.css';
 @import "tailwindcss";
+@plugin 'tailwind-scrollbar';
+@plugin '@tailwindcss/typography';
 
 :root {
   font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
