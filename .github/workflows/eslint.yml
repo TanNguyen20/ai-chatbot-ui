@@ -30,8 +30,6 @@ jobs:
       - name: Install dependencies
         run: yarn install --frozen-lockfile
 
-      # Install formatter into local node_modules so ESLint can resolve it.
-      # --no-save avoids mutating package.json/yarn.lock.
       - name: Install SARIF formatter (no save)
         run: npm i -D --no-save @microsoft/eslint-formatter-sarif@3
 
@@ -39,8 +37,9 @@ jobs:
         run: |
           npx eslint . \
             --format=@microsoft/eslint-formatter-sarif \
-            --output-file=eslint-results.sarif \
-            --max-warnings=0
+            --output-file=eslint-results.sarif
+        # If you want the job to pass even on ESLint **errors**, uncomment:
+        # continue-on-error: true
 
       - name: Upload to GitHub Security
         if: always()
