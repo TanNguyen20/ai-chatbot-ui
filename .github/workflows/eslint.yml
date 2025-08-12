@@ -1,16 +1,5 @@
-name: ESLint
-
-on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
-  schedule:
-    - cron: '32 12 * * 4'
-
 jobs:
   eslint:
-    name: Run ESLint scanning
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -25,14 +14,15 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install dependencies
+      - name: Install deps
         run: yarn install --frozen-lockfile
 
-      # use npx to avoid changing package.json/lockfile
+      # Make formatter resolvable from ./node_modules, but don't modify package.json/lockfile
+      - name: Install SARIF formatter (no save)
+        run: npm i -D --no-save @microsoft/eslint-formatter-sarif@3
+
       - name: ESLint with SARIF
         run: |
-          npx -y @microsoft/eslint-formatter-sarif@3 \
-          >/dev/null 2>&1 || true
           npx eslint . \
             --format=@microsoft/eslint-formatter-sarif \
             --output-file=eslint-results.sarif \
