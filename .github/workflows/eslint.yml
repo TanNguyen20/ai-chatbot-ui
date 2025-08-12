@@ -26,19 +26,15 @@ jobs:
       - name: Install SARIF formatter
         run: yarn add --dev @microsoft/eslint-formatter-sarif
 
-      - name: Run ESLint (Flat Config)
-        env:
-          SARIF_ESLINT_IGNORE_SUPPRESSED: "true"
+      - name: ESLint with SARIF
         run: |
-          yarn eslint . \
-            --no-error-on-unmatched-pattern \
-            --format @microsoft/eslint-formatter-sarif \
-            --output-file eslint-results.sarif \
-          || echo '{"version":"2.1.0","runs":[]}' > eslint-results.sarif
-        continue-on-error: true
+          npx eslint . \
+            --format=@microsoft/eslint-formatter-sarif \
+            --output-file=eslint-results.sarif \
+            --max-warnings=0
 
-      - name: Upload analysis results to GitHub
-        uses: github/codeql-action/upload-sarif@v3
+      - name: Upload to GitHub Security
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
         with:
           sarif_file: eslint-results.sarif
-          wait-for-processing: true
