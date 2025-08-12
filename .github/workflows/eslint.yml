@@ -20,21 +20,26 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
       - name: Install dependencies
         run: yarn install --frozen-lockfile
 
-      - name: Install SARIF formatter
-        run: yarn add --dev @microsoft/eslint-formatter-sarif
-
+      # use npx to avoid changing package.json/lockfile
       - name: ESLint with SARIF
         run: |
+          npx -y @microsoft/eslint-formatter-sarif@3 \
+          >/dev/null 2>&1 || true
           npx eslint . \
             --format=@microsoft/eslint-formatter-sarif \
             --output-file=eslint-results.sarif \
             --max-warnings=0
 
       - name: Upload to GitHub Security
-        uses: github/codeql-action/upload-sarif@v2
         if: always()
+        uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: eslint-results.sarif
