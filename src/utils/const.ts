@@ -1,8 +1,8 @@
-export const JAVA_BASE = "http://localhost:8080";
-export const PY_BASE = "http://localhost:8000";
+export const AI_CHAT_SERVICE_BASE_URL = import.meta.env.VITE_AI_CHAT_SERVICE_BASE_URL;
+export const AI_CORE_SERVICE_BASE_URL = import.meta.env.VITE_AI_CORE_SERVICE_BASE_URL;
 
-export const CONFIG_URL = `${JAVA_BASE}/api/v1/chatbot/info`;
-export const STREAM_URL = `${PY_BASE}/stream/ask-question`;
+export const CONFIG_URL = `${AI_CHAT_SERVICE_BASE_URL}/api/v1/chatbot/info`;
+export const STREAM_URL = `${AI_CORE_SERVICE_BASE_URL}/stream/ask-question`;
 
 export const cls = {
   textBase: "text-gray-800 dark:text-neutral-100",

@@ -11,7 +11,7 @@ class AiChatElement extends HTMLElement {
   }
 
   async connectedCallback() {
-    const sourceHost = import.meta.env.MODE === "development" ? "http://localhost:5173" : import.meta.env.VITE_SOURCE_HOST;
+    const sourceHost = import.meta.env.VITE_SOURCE_HOST;
 
     // Inject Tailwind CSS into Shadow DOM
     const res = await fetch(sourceHost + '/ai-chat-ui.css');
@@ -32,5 +32,6 @@ class AiChatElement extends HTMLElement {
 
 customElements.define('ai-chat', AiChatElement);
 
-
-ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(<AiChat apiKey={import.meta.env.VITE_API_KEY} />);
+if (import.meta.env.MODE === "development") {
+  ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(<AiChat apiKey={import.meta.env.VITE_API_KEY} />);
+}
