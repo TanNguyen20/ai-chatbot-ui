@@ -17,7 +17,7 @@ class AiChatElement extends HTMLElement {
     const res = await fetch(sourceHost + '/ai-chat-ui.css');
     const css = await res.text();
     
-    const style = document.createElement('style');
+    const style:any = document.createElement('style');
     
     style.textContent = css;
     this.root.appendChild(style);
