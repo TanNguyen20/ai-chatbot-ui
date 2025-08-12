@@ -21,7 +21,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: react-build
-          path: build
+          path: dist
 
       - name: Deploy dist folder to build branch
         uses: peaceiris/actions-gh-pages@v3
