@@ -1,10 +1,22 @@
+name: ESLint
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  schedule:
+    - cron: '32 12 * * 4'
+
 jobs:
   eslint:
+    name: Run ESLint scanning
     runs-on: ubuntu-latest
     permissions:
       contents: read
       security-events: write
       actions: read
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -13,11 +25,13 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'yarn'
 
-      - name: Install deps
+      - name: Install dependencies
         run: yarn install --frozen-lockfile
 
-      # Make formatter resolvable from ./node_modules, but don't modify package.json/lockfile
+      # Install formatter into local node_modules so ESLint can resolve it.
+      # --no-save avoids mutating package.json/yarn.lock.
       - name: Install SARIF formatter (no save)
         run: npm i -D --no-save @microsoft/eslint-formatter-sarif@3
 
