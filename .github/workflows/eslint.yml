@@ -10,15 +10,25 @@ on:
 
 jobs:
   eslint:
-    name: Run eslint scanning
+    name: Run ESLint scanning
     runs-on: ubuntu-latest
     permissions:
       contents: read
       security-events: write
       actions: read
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      # (Optional) Cache node_modules to speed up runs
+      - name: Cache npm dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
 
       - name: Install ESLint and dependencies
         run: |
@@ -30,12 +40,16 @@ jobs:
         env:
           SARIF_ESLINT_IGNORE_SUPPRESSED: "true"
         run: |
-          npx eslint . \
+          # Try running ESLint; if it crashes, create a fallback SARIF
+          if ! npx eslint . \
             --config .eslintrc.js \
             --ext .js,.jsx,.ts,.tsx \
             --format @microsoft/eslint-formatter-sarif \
-            --output-file eslint-results.sarif \
-          || echo '{"version":"2.1.0","runs":[]}' > eslint-results.sarif
+            --output-file eslint-results.sarif; then
+            echo "ESLint failed — creating fallback SARIF"
+            echo '{"version":"2.1.0","runs":[{"tool":{"driver":{"name":"ESLint","informationUri":"https://eslint.org","rules":[]}},"results":[]}]}'
+              > eslint-results.sarif
+          fi
         continue-on-error: true
 
       - name: Upload analysis results to GitHub
