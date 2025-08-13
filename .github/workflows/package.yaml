@@ -17,15 +17,10 @@ jobs:
       - name: Build
         run: yarn build
 
-      - name: Upload production-ready build files
-        uses: actions/upload-artifact@v4
-        with:
-          name: react-build
-          path: dist
-
       - name: Deploy dist folder to build branch
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./dist
           publish_branch: build
+          force_orphan: true
