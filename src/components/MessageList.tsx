@@ -21,16 +21,18 @@ const MessageList: React.FC<Props> = ({ messages, isExpanded }) => {
           {msg.sender === "bot" && (
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0"><CpuChipIcon className="w-4 h-4 text-white" /></div>
           )}
-          <div className={cx("max-w-[75%]", msg.sender === "user" && "order-1")}>
+          <div className={cx("max-w-[85%]", msg.sender === "user" && "order-1")}>
             <div className={cx(
-              "px-4 py-3 rounded-2xl shadow-sm text-sm leading-relaxed space-y-2",
+              "px-3 py-2 rounded-2xl shadow-sm text-sm leading-relaxed space-y-2",
               "break-words",
               msg.sender === "user"
-                ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-br-md"
-                : cx(cls.panel, cls.border, "text-gray-800 dark:text-neutral-100 rounded-bl-md")
+                ? "bg-gradient-to-r from-blue-600 to-indigo-600 rounded-br-md"
+                : cx(cls.panel, cls.border, "rounded-bl-md")
             )}>
               {msg.text && (
-                <div className="prose prose-sm dark:prose-invert max-w-none break-words prose-pre:my-0 prose-p:my-2">
+                <div className={cx("prose prose-sm dark:prose-invert max-w-none break-words prose-pre:my-0 prose-p:my-2",
+                  msg.sender === "user" ? "text-white" : "text-gray-800 dark:text-neutral-100"
+                )}>
                   <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{msg.text}</ReactMarkdown>
                 </div>
               )}
