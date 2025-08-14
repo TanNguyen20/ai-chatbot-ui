@@ -1,0 +1,26 @@
+tools:
+  - name: eslint
+    enabled: true
+    config:
+      file: ".eslintrc.json"
+    patterns:
+      - pattern: "**/*.ts"
+      - pattern: "**/*.tsx"
+      - pattern: "**/*.js"
+      - pattern: "**/*.jsx"
+
+  - name: remark-lint
+    enabled: true
+
+  # Disable Java & deprecated tools
+  - name: pmd
+    enabled: false
+  - name: pmd-legacy
+    enabled: false
+  - name: tslint
+    enabled: false
+
+exclude_paths:
+  - "dist/"
+  - "build/"
+  - "node_modules/"
