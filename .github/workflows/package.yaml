@@ -1,12 +1,21 @@
 name: Deploy to jsDelivr
+
 on:
   push:
     branches:
       - main
 
+# Default: lock down the token for all jobs
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    # This job must push to the repo (build branch), so grant only what's needed
+    permissions:
+      contents: write
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
