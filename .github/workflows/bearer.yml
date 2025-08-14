@@ -23,6 +23,7 @@ jobs:
         id: report
         uses: bearer/bearer-action@v2
         with:
+          version: 1.50.1
           format: sarif
           output: results.sarif
           exit-code: 0
