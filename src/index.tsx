@@ -81,7 +81,7 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
   if (error || !config || turnedOff) {
     if (error) {
       return (
-        <div className="fixed bottom-5 right-5 z=[9999]">
+        <div className="fixed bottom-5 right-5 z-[9999]">
           <div className="w-14 h-14 flex items-center justify-center rounded-full bg-red-500 shadow-lg" aria-live="polite">
             <ExclamationTriangleIcon className="w-6 h-6 text-white" />
           </div>
