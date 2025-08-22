@@ -13,7 +13,7 @@ type Props = {
 };
 
 const ChatArea: React.FC<Props> = ({ chatRef, messages, isTyping, isExpanded }) => (
-  <div ref={chatRef} className="flex-1 overflow-y-auto p-4 space-y-4 bg-gradient-to-b from-gray-50/70 to-white/60 dark:from-neutral-900/60 dark:to-neutral-900">
+  <div ref={chatRef} className="flex-1 overflow-y-auto p-4 space-y-4 bg-[#f5f5f5] dark:bg-neutral-800">
     {messages.length === 0 ? (
       <div className="text-center py-10">
         <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-blue-100 to-purple-100 rounded-full flex items-center justify-center dark:from-blue-900/20 dark:to-purple-900/20">
