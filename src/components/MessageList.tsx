@@ -26,9 +26,10 @@ const MessageList: React.FC<Props> = ({ messages, isExpanded }) => {
               "px-3 py-2 rounded-2xl shadow-sm text-sm leading-relaxed space-y-2",
               "break-words",
               msg.sender === "user"
-                ? "bg-gradient-to-r from-blue-600 to-indigo-600 rounded-br-md"
+                ? "rounded-br-md"
                 : cx(cls.panel, cls.border, "rounded-bl-md")
-            )}>
+            )}
+            style={{ background: msg.sender === "user" ? `linear-gradient(135deg, var(--theme), color-mix(in oklab, var(--theme) 90%, black))` : undefined }}>
               {msg.text && (
                 <div className={cx("prose prose-sm dark:prose-invert max-w-none break-words prose-pre:my-0 prose-p:my-2",
                   msg.sender === "user" ? "text-white" : "text-gray-800 dark:text-neutral-100"

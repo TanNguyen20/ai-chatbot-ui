@@ -11,6 +11,6 @@ export const cls = {
   icon: "text-gray-700 dark:text-neutral-200",
   iconSubtle: "text-gray-500 dark:text-neutral-400",
   border: "border-gray-200 dark:border-neutral-700",
-  panel: "bg-white dark:bg-neutral-800",
+  panel: "bg-white dark:bg-[#373737]",
   chipBg: "bg-gray-50 dark:bg-neutral-900",
 };
